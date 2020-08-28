@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"golang.org/x/sys/unix"
 )
 
 var macAddrCounter uint64 = 0xBEEFED910200
@@ -549,10 +551,30 @@ func (n *Net) ListenPacket(network string, address string) (net.PacketConn, erro
 	return n.v.listenPacket(network, address)
 }
 
+func check(e error) {
+	if e != nil {
+		panic(e)
+	}
+}
+
 // ListenUDP acts like ListenPacket for UDP networks.
 func (n *Net) ListenUDP(network string, locAddr *net.UDPAddr) (UDPPacketConn, error) {
+	fmt.Println(network, locAddr)
 	if n.v == nil {
-		return net.ListenUDP(network, locAddr)
+
+		x, y := net.ListenUDP(network, locAddr)
+		if y == nil {
+			f, err := x.File()
+			if err == nil {
+				
+				fd := f.Fd()
+				err = unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_REUSEPORT, 1)
+				check(err)
+				fmt.Println("SetsockoptInt called")
+			}
+		}
+
+		return x, y
 	}
 
 	return n.v.listenUDP(network, locAddr)
